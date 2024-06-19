@@ -109,3 +109,43 @@ dmypy.json
 
 # Pylint reports
 pylint_report.txt
+
+# Ignore JSON files in the data directory
+data/*.json
+
+# Ignore Python bytecode files
+*.pyc
+*.pyo
+__pycache__/
+
+# Ignore virtual environment directories
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Ignore system-specific files
+.DS_Store
+Thumbs.db
+
+# Ignore output directories and files
+data/
+*.log
+*.csv
+*.db
+*.json
+
+# Ignore JetBrains IDE settings (PyCharm, IntelliJ, etc.)
+.idea/
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore OS generated files
+*.DS_Store
+*.AppleDouble
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
