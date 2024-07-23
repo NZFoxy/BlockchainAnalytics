@@ -3,16 +3,23 @@ import requests
 import json
 import time
 from urllib.parse import urlencode, urlunparse
+import pyodbc
+import pandas as pd
 
 # Ensure API key is set
 api_key = os.getenv('POLYGONSCAN_API_KEY')
 if not api_key:
     raise ValueError("API Key is not set in environment variables")
 
-# Directory for output
-data_directory = 'data'
-if not os.path.exists(data_directory):
-    os.makedirs(data_directory)
+# Azure SQL Database connection details
+server = os.getenv('AZURE_SQL_SERVER')
+database = os.getenv('AZURE_SQL_DATABASE')
+username = os.getenv('AZURE_SQL_USERNAME')
+password = os.getenv('AZURE_SQL_PASSWORD')
+driver = '{ODBC Driver 17 for SQL Server}'
+
+if not all([server, database, username, password]):
+    raise ValueError("Azure SQL Database connection details are not fully set in environment variables")
 
 # Directory for errors
 error_directory = 'errors'
@@ -26,7 +33,8 @@ def log_error(wallet_address, error_message):
     """Log the wallet address and error message to a JSON file."""
     error_log = {
         'wallet_address': wallet_address,
-        'error_message': error_message
+        'error_message': error_message,
+        'timestamp': time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())  # Add timestamp to log
     }
     error_filename = f'{error_directory}/errors.json'
     if os.path.exists(error_filename):
@@ -50,7 +58,7 @@ def get_starting_block(wallet_address):
         'sort': 'asc',
         'apikey': api_key,
         'page': 1,
-        'offset': 1
+        'offset': 1  # Limit to first transaction to get starting block
     }
     url_parts = ('https', 'api.polygonscan.com', '/api', '', urlencode(query_params), '')
     url = urlunparse(url_parts)
@@ -59,7 +67,7 @@ def get_starting_block(wallet_address):
         response.raise_for_status()
         tx_data = response.json()
         if 'result' in tx_data and isinstance(tx_data['result'], list) and len(tx_data['result']) > 0:
-            return int(tx_data['result'][0]['blockNumber'])
+            return int(tx_data['result'][0]['blockNumber'])  # Return block number of first transaction
         else:
             print("No transactions found for this address.")
             return None
@@ -83,25 +91,27 @@ def get_current_block():
         response.raise_for_status()
         block_data = response.json()
         if 'result' in block_data:
-            return int(block_data['result'], 16)  # Convert hex to int
+            return int(block_data['result'], 16)  # Convert hex block number to integer
     except requests.RequestException as e:
         log_error('current_block', f"Request error: {e}")
     except json.JSONDecodeError:
         log_error('current_block', "Failed to decode JSON from response.")
     return None
 
-def fetch_tx_by_address(wallet_address, start_block, end_block, chunk_size, depth=0, max_depth=2):
-    """Fetch transactions for a specific address from Polygonscan and save them in JSON files."""
+def fetch_tx_by_address(wallet_address, start_block, end_block, chunk_size, depth=0, max_depth=1):
+    """Fetch transactions for a specific address from Polygonscan and save them in SQL table."""
+    # Return if wallet has already been processed or max depth is exceeded
     if wallet_address in processed_wallets or depth > max_depth:
         return
     
-    processed_wallets.add(wallet_address)
-    start = time.time()
-    page = 1
-    new_wallets = set()
+    processed_wallets.add(wallet_address)  # Mark wallet as processed
+    start = time.time()  # Record start time for performance measurement
+    page = 1  # Start with the first page of transactions
+    new_wallets = set()  # Set to store newly discovered wallets
     total_transactions = 0  # Initialize counter for transactions
     
     while True:
+        # Prepare API query parameters
         query_params = {
             'module': 'account',
             'action': 'txlist',
@@ -123,11 +133,12 @@ def fetch_tx_by_address(wallet_address, start_block, end_block, chunk_size, dept
                 if not tx_data['result']:
                     break  # Exit loop if no more transactions are found
                 transactions = tx_data['result']
-                total_transactions += len(transactions)  # Update counter
-                filename = f'{data_directory}/tx_{wallet_address}_{page}.json'
-                with open(filename, 'w') as file:
-                    json.dump(transactions, file, indent=4)
-                print(f"Data has been written to {filename}")
+                total_transactions += len(transactions)  # Update transaction counter
+
+                # Save to SQL Database
+                save_to_sql(transactions)
+                
+                print(f"Data has been written to the SQL database")
                 print(f"Total transactions pulled so far: {total_transactions}")
                 for tx in transactions:
                     new_wallets.add(tx['to'])
@@ -144,9 +155,9 @@ def fetch_tx_by_address(wallet_address, start_block, end_block, chunk_size, dept
             break
         
         # Sleep to respect rate limits (5 calls/second)
-        #time.sleep(0.2)  # 0.2 seconds sleep to stay within 5 calls per second
+        time.sleep(0.2)  # 0.2 seconds sleep to stay within 5 calls per second
     
-    end = time.time()
+    end = time.time()  # Record end time for performance measurement
     total_time = end - start
     print(f"Total time taken: {total_time:.2f} seconds")
 
@@ -157,6 +168,68 @@ def fetch_tx_by_address(wallet_address, start_block, end_block, chunk_size, dept
                 new_start_block = get_starting_block(new_wallet)
                 if new_start_block is not None:
                     fetch_tx_by_address(new_wallet, new_start_block, end_block, chunk_size, depth + 1, max_depth)
+
+def save_to_sql(transactions):
+    """Save the transactions data to an Azure SQL Database table."""
+    conn = pyodbc.connect(
+        f'DRIVER={driver};SERVER={server};PORT=1433;DATABASE={database};UID={username};PWD={password}')
+    cursor = conn.cursor()
+
+    # Create table if it does not exist
+    cursor.execute("""
+    IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Transactions' AND xtype='U')
+    CREATE TABLE Transactions (
+        hash NVARCHAR(66),
+        nonce INT,
+        blockHash NVARCHAR(66),
+        blockNumber BIGINT,
+        transactionIndex INT,
+        fromAddress NVARCHAR(42),
+        toAddress NVARCHAR(42),
+        value BIGINT,
+        gas BIGINT,
+        gasPrice BIGINT,
+        isError INT,
+        txreceipt_status INT,
+        input NVARCHAR(MAX),
+        contractAddress NVARCHAR(42),
+        cumulativeGasUsed BIGINT,
+        gasUsed BIGINT,
+        confirmations BIGINT,
+        timestamp BIGINT
+    )
+    """)
+
+    for tx in transactions:
+        cursor.execute("""
+        INSERT INTO Transactions (
+            hash, nonce, blockHash, blockNumber, transactionIndex, fromAddress, toAddress, value, gas, gasPrice,
+            isError, txreceipt_status, input, contractAddress, cumulativeGasUsed, gasUsed, confirmations, timestamp
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            tx.get('hash'),
+            int(tx.get('nonce', 0)),
+            tx.get('blockHash'),
+            int(tx.get('blockNumber', 0)),
+            int(tx.get('transactionIndex', 0)),
+            tx.get('from'),
+            tx.get('to'),
+            int(tx.get('value', 0)),
+            int(tx.get('gas', 0)),
+            int(tx.get('gasPrice', 0)),
+            int(tx.get('isError', 0)),
+            int(tx.get('txreceipt_status', 0)),
+            tx.get('input'),
+            tx.get('contractAddress'),
+            int(tx.get('cumulativeGasUsed', 0)),
+            int(tx.get('gasUsed', 0)),
+            int(tx.get('confirmations', 0)),
+            int(tx.get('timeStamp', 0))
+        ))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 # Prompt for user inputs
 wallet_address = input("Enter the wallet address: ")
