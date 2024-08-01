@@ -134,20 +134,24 @@ def fetch_tx_by_address(wallet_address, start_block, end_block, chunk_size, dept
             response.raise_for_status()
             tx_data = response.json()
             if 'result' in tx_data and isinstance(tx_data['result'], list):
-                if not tx_data['result']:
-                    break
                 transactions = tx_data['result']
+                if not transactions:
+                    logging.info("No more transactions found. Exiting pagination loop.")
+                    break
+                
                 total_transactions += len(transactions)
                 save_to_sql(transactions)
                 logging.info(f"Data has been written to the SQL database. Total transactions pulled so far: {total_transactions}")
+                
                 for tx in transactions:
                     if tx['to'] and tx['to'] not in processed_wallets:
                         new_wallets.add(tx['to'])
                     if tx['from'] and tx['from'] not in processed_wallets:
                         new_wallets.add(tx['from'])
+                
                 page += 1
             else:
-                logging.warning("Failed to fetch transactions.")
+                logging.warning("Failed to fetch transactions. Exiting.")
                 break
         except requests.RequestException as e:
             log_error(wallet_address, f"Request error: {e}")
@@ -167,6 +171,7 @@ def fetch_tx_by_address(wallet_address, start_block, end_block, chunk_size, dept
             new_start_block = get_starting_block(new_wallet)
             if new_start_block is not None:
                 fetch_tx_by_address(new_wallet, new_start_block, end_block, chunk_size, depth + 1, max_depth)
+
 
 def save_to_sql(transactions):
     """Save the transactions data to an Azure SQL Database table."""
