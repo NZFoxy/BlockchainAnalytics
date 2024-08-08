@@ -3,8 +3,7 @@ import requests
 import json
 import time
 from urllib.parse import urlencode, urlunparse
-import pyodbc
-import pandas as pd
+import sqlite3
 from decimal import Decimal
 import logging
 
@@ -16,16 +15,13 @@ api_key = os.getenv('POLYGONSCAN_API_KEY')
 if not api_key:
     raise ValueError("API Key is not set in environment variables")
 
-# Azure SQL Database connection details
-server = 'autblockchain.database.windows.net'
-database = 'TransactionsAll'
-username = 'CloudSAcab2136b'
-password = 'Bottles1!'  # Ask Daniel
-driver = '{ODBC Driver 18 for SQL Server}'
+# Ensure the Database directory exists
+database_dir = 'Database'
+if not os.path.exists(database_dir):
+    os.makedirs(database_dir)
 
-# Ensure all database connection details are set
-if not all([server, database, username, password]):
-    raise ValueError("Azure SQL Database connection details are not fully set in environment variables")
+# SQLite database connection details
+database = os.path.join(database_dir, 'transactions.db')
 
 # Directory for errors
 error_directory = 'errors'
@@ -139,8 +135,10 @@ def fetch_tx_by_address(wallet_address, start_block, end_block, chunk_size, dept
                     logging.info("No more transactions found. Exiting pagination loop.")
                     break
                 
-                total_transactions += len(transactions)
-                save_to_sql(transactions)
+                # Filter out transactions that already exist in the database
+                unique_transactions = filter_unique_transactions(transactions)
+                total_transactions += len(unique_transactions)
+                save_to_sql(unique_transactions)
                 logging.info(f"Data has been written to the SQL database. Total transactions pulled so far: {total_transactions}")
                 
                 for tx in transactions:
@@ -150,6 +148,8 @@ def fetch_tx_by_address(wallet_address, start_block, end_block, chunk_size, dept
                         new_wallets.add(tx['from'])
                 
                 page += 1
+                # Update start_block to prevent fetching duplicate transactions
+                start_block = int(transactions[-1]['blockNumber']) + 1
             else:
                 logging.warning("Failed to fetch transactions. Exiting.")
                 break
@@ -172,35 +172,47 @@ def fetch_tx_by_address(wallet_address, start_block, end_block, chunk_size, dept
             if new_start_block is not None:
                 fetch_tx_by_address(new_wallet, new_start_block, end_block, chunk_size, depth + 1, max_depth)
 
+def filter_unique_transactions(transactions):
+    """Filter out transactions that already exist in the database."""
+    conn = sqlite3.connect(database)
+    cursor = conn.cursor()
+    
+    unique_transactions = []
+    for tx in transactions:
+        cursor.execute("SELECT COUNT(*) FROM Transactions WHERE hash = ?", (tx.get('hash'),))
+        if cursor.fetchone()[0] == 0:
+            unique_transactions.append(tx)
+    
+    cursor.close()
+    conn.close()
+    return unique_transactions
 
 def save_to_sql(transactions):
-    """Save the transactions data to an Azure SQL Database table."""
-    conn = pyodbc.connect(
-        f'DRIVER={driver};SERVER={server};PORT=1433;DATABASE={database};UID={username};PWD={password}')
+    """Save the transactions data to an SQLite Database table."""
+    conn = sqlite3.connect(database)
     cursor = conn.cursor()
 
     # Create table if it does not exist
     cursor.execute("""
-    IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Transactions' AND xtype='U')
-    CREATE TABLE Transactions (
-        hash NVARCHAR(66),
-        nonce BIGINT,
-        blockHash NVARCHAR(66),
-        blockNumber BIGINT,
-        transactionIndex INT,
-        fromAddress NVARCHAR(42),
-        toAddress NVARCHAR(42),
-        value DECIMAL(38,0),
-        gas DECIMAL(38,0),
-        gasPrice DECIMAL(38,0),
-        isError INT,
-        txreceipt_status INT,
-        input NVARCHAR(MAX),
-        contractAddress NVARCHAR(42),
-        cumulativeGasUsed DECIMAL(38,0),
-        gasUsed DECIMAL(38,0),
-        confirmations BIGINT,
-        timestamp BIGINT
+    CREATE TABLE IF NOT EXISTS Transactions (
+        hash TEXT,
+        nonce INTEGER,
+        blockHash TEXT,
+        blockNumber INTEGER,
+        transactionIndex INTEGER,
+        fromAddress TEXT,
+        toAddress TEXT,
+        value DECIMAL,
+        gas DECIMAL,
+        gasPrice DECIMAL,
+        isError INTEGER,
+        txreceipt_status INTEGER,
+        input TEXT,
+        contractAddress TEXT,
+        cumulativeGasUsed DECIMAL,
+        gasUsed DECIMAL,
+        confirmations INTEGER,
+        timestamp INTEGER
     )
     """)
 
@@ -231,6 +243,15 @@ def save_to_sql(transactions):
             int(tx.get('timeStamp', 0))
         ))
 
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def drop_transactions_table():
+    """Drop the Transactions table if it exists."""
+    conn = sqlite3.connect(database)
+    cursor = conn.cursor()
+    cursor.execute("DROP TABLE IF EXISTS Transactions")
     conn.commit()
     cursor.close()
     conn.close()

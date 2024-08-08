@@ -153,3 +153,9 @@ data/
 
 # Ignore error logs
 errors/
+
+# Ignore everything in the Database directory
+Database/*
+
+# Except the database file
+!Database/transactions.db
