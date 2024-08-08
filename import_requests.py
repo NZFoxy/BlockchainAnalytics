@@ -100,10 +100,94 @@ def get_current_block():
         log_error('current_block', "Failed to decode JSON from response.")
     return None
 
+def ensure_transactions_table_exists():
+    """Ensure the Transactions table exists in the SQLite database."""
+    conn = sqlite3.connect(database)
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS Transactions (
+        hash TEXT PRIMARY KEY,
+        nonce INTEGER,
+        blockHash TEXT,
+        blockNumber INTEGER,
+        transactionIndex INTEGER,
+        fromAddress TEXT,
+        toAddress TEXT,
+        value TEXT,
+        gas TEXT,
+        gasPrice TEXT,
+        isError INTEGER,
+        txreceipt_status INTEGER,
+        input TEXT,
+        contractAddress TEXT,
+        cumulativeGasUsed TEXT,
+        gasUsed TEXT,
+        confirmations INTEGER,
+        timestamp INTEGER
+    )
+    """)
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def filter_unique_transactions(transactions):
+    """Filter out transactions that already exist in the database."""
+    conn = sqlite3.connect(database)
+    cursor = conn.cursor()
+    
+    unique_transactions = []
+    for tx in transactions:
+        cursor.execute("SELECT COUNT(*) FROM Transactions WHERE hash = ?", (tx.get('hash'),))
+        if cursor.fetchone()[0] == 0:
+            unique_transactions.append(tx)
+    
+    cursor.close()
+    conn.close()
+    return unique_transactions
+
+def save_to_sql(transactions):
+    """Save the transactions data to an SQLite Database table."""
+    conn = sqlite3.connect(database)
+    cursor = conn.cursor()
+
+    for tx in transactions:
+        cursor.execute("""
+        INSERT INTO Transactions (
+            hash, nonce, blockHash, blockNumber, transactionIndex, fromAddress, toAddress, value, gas, gasPrice,
+            isError, txreceipt_status, input, contractAddress, cumulativeGasUsed, gasUsed, confirmations, timestamp
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            tx.get('hash'),
+            int(tx.get('nonce', 0)),
+            tx.get('blockHash'),
+            int(tx.get('blockNumber', 0)),
+            int(tx.get('transactionIndex', 0)),
+            tx.get('from'),
+            tx.get('to'),
+            str(tx.get('value', 0)),
+            str(tx.get('gas', 0)),
+            str(tx.get('gasPrice', 0)),
+            int(tx.get('isError', 0)),
+            int(tx.get('txreceipt_status', 0)),
+            tx.get('input'),
+            tx.get('contractAddress'),
+            str(tx.get('cumulativeGasUsed', 0)),
+            str(tx.get('gasUsed', 0)),
+            int(tx.get('confirmations', 0)),
+            int(tx.get('timeStamp', 0))
+        ))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
 def fetch_tx_by_address(wallet_address, start_block, end_block, chunk_size, depth=0, max_depth=1):
     """Fetch transactions for a specific address from Polygonscan and save them in SQL table."""
     if wallet_address in processed_wallets or depth > max_depth:
         return
+    
+    # Ensure the Transactions table exists
+    ensure_transactions_table_exists()
     
     processed_wallets.add(wallet_address)
     start_time = time.time()
@@ -171,90 +255,6 @@ def fetch_tx_by_address(wallet_address, start_block, end_block, chunk_size, dept
             new_start_block = get_starting_block(new_wallet)
             if new_start_block is not None:
                 fetch_tx_by_address(new_wallet, new_start_block, end_block, chunk_size, depth + 1, max_depth)
-
-def filter_unique_transactions(transactions):
-    """Filter out transactions that already exist in the database."""
-    conn = sqlite3.connect(database)
-    cursor = conn.cursor()
-    
-    unique_transactions = []
-    for tx in transactions:
-        cursor.execute("SELECT COUNT(*) FROM Transactions WHERE hash = ?", (tx.get('hash'),))
-        if cursor.fetchone()[0] == 0:
-            unique_transactions.append(tx)
-    
-    cursor.close()
-    conn.close()
-    return unique_transactions
-
-def save_to_sql(transactions):
-    """Save the transactions data to an SQLite Database table."""
-    conn = sqlite3.connect(database)
-    cursor = conn.cursor()
-
-    # Create table if it does not exist
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS Transactions (
-        hash TEXT,
-        nonce INTEGER,
-        blockHash TEXT,
-        blockNumber INTEGER,
-        transactionIndex INTEGER,
-        fromAddress TEXT,
-        toAddress TEXT,
-        value DECIMAL,
-        gas DECIMAL,
-        gasPrice DECIMAL,
-        isError INTEGER,
-        txreceipt_status INTEGER,
-        input TEXT,
-        contractAddress TEXT,
-        cumulativeGasUsed DECIMAL,
-        gasUsed DECIMAL,
-        confirmations INTEGER,
-        timestamp INTEGER
-    )
-    """)
-
-    for tx in transactions:
-        cursor.execute("""
-        INSERT INTO Transactions (
-            hash, nonce, blockHash, blockNumber, transactionIndex, fromAddress, toAddress, value, gas, gasPrice,
-            isError, txreceipt_status, input, contractAddress, cumulativeGasUsed, gasUsed, confirmations, timestamp
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            tx.get('hash'),
-            int(tx.get('nonce', 0)),
-            tx.get('blockHash'),
-            int(tx.get('blockNumber', 0)),
-            int(tx.get('transactionIndex', 0)),
-            tx.get('from'),
-            tx.get('to'),
-            Decimal(tx.get('value', 0)),
-            Decimal(tx.get('gas', 0)),
-            Decimal(tx.get('gasPrice', 0)),
-            int(tx.get('isError', 0)),
-            int(tx.get('txreceipt_status', 0)),
-            tx.get('input'),
-            tx.get('contractAddress'),
-            Decimal(tx.get('cumulativeGasUsed', 0)),
-            Decimal(tx.get('gasUsed', 0)),
-            int(tx.get('confirmations', 0)),
-            int(tx.get('timeStamp', 0))
-        ))
-
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-def drop_transactions_table():
-    """Drop the Transactions table if it exists."""
-    conn = sqlite3.connect(database)
-    cursor = conn.cursor()
-    cursor.execute("DROP TABLE IF EXISTS Transactions")
-    conn.commit()
-    cursor.close()
-    conn.close()
 
 if __name__ == "__main__":
     # Prompt for user inputs
