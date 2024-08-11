@@ -5,6 +5,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
 import pandas as pd
 
+#Dataframe
 def preprocess_data(df):
     df['value'] = df['value'].astype(float)
     df['gasPrice'] = df['gasPrice'].astype(float)

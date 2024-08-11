@@ -17,7 +17,7 @@ def main():
     # Train the machine learning model
     clf = ml_model.train_model(X_train, y_train)
 
-    # Evaluate the model's performance
+    # Evaluate the model's performance!
     ml_model.evaluate_model(clf, X_test, y_test)
 
     # Classify all transactions and count the number of each type
