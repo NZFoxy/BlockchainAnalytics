@@ -7,4 +7,3 @@ def fetch_data_from_sql(database_path):
     df = pd.read_sql_query(query, conn)
     conn.close()
     return df
-#s

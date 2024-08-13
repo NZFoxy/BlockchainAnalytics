@@ -205,7 +205,7 @@ def fetch_tx_by_address(wallet_address, start_block, end_block, chunk_size, dept
             'sort': 'asc',
             'apikey': api_key,
             'page': page,
-            'offset': chunk_size
+            'offset': chunk_size,
         }
         url_parts = ('https', 'api.polygonscan.com', '/api', '', urlencode(query_params), '')
         url = urlunparse(url_parts)
@@ -215,6 +215,7 @@ def fetch_tx_by_address(wallet_address, start_block, end_block, chunk_size, dept
             tx_data = response.json()
             if 'result' in tx_data and isinstance(tx_data['result'], list):
                 transactions = tx_data['result']
+
                 if not transactions:
                     logging.info("No more transactions found. Exiting pagination loop.")
                     break
