@@ -4,7 +4,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
-from fraud_scoring import calculate_fraud_score
+from classify import calculate_fraud_score
 
 def preprocess_data(df):
     # Convert data types

@@ -1,26 +1,26 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
-import fetch_transactions
-import model_training
+import fetch_data
+import ml_model
 
 def main():
     # Fetch all transactions from the database
-    data = fetch_transactions.fetch_data_from_sql('Database/transactions.db')
+    data = fetch_data.fetch_data_from_sql('Database/transactions.db')
 
     # Preprocess the data
-    X, y, scaler = model_training.preprocess_data(data)
+    X, y, scaler = ml_model.preprocess_data(data)
 
     # Split the data into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
     # Train the machine learning model
-    regressor = model_training.train_model(X_train, y_train)
+    regressor = ml_model.train_model(X_train, y_train)
 
     # Evaluate the model's performance
-    model_training.evaluate_model(regressor, X_test, y_test)
+    ml_model.evaluate_model(regressor, X_test, y_test)
 
     # Predict fraud scores for all transactions
-    predictions = model_training.predict_all_transactions(data, scaler, regressor)
+    predictions = ml_model.predict_all_transactions(data, scaler, regressor)
     
     # Initialize counters for each severity level
     green_count = 0
@@ -43,7 +43,7 @@ def main():
     # Predict the fraud score for a new transaction
     new_transaction = pd.DataFrame([[15000, 0.0001, 21000, 1692799200]], 
                                     columns=['value', 'gasPrice', 'gas', 'timestamp'])  # Example: [value, gasPrice, gas, timestamp]
-    fraud_score = model_training.predict_transaction(new_transaction, scaler, regressor)
+    fraud_score = ml_model.predict_transaction(new_transaction, scaler, regressor)
     
     # Determine severity level based on fraud score
     if fraud_score <= 0.5:

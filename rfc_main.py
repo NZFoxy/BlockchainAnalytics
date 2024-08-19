@@ -4,7 +4,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 #%matplotlib inline
-import fetch_transactions
+import fetch_data
 
 from sklearn import datasets, metrics
 from sklearn.model_selection import train_test_split
@@ -24,7 +24,7 @@ def main():
     #the "label"
     target_column = 'flag'
 
-    transactions_dataset = fetch_transactions.create_dataset_from_df('Database/transactions.db',feature_columns,target_column)
+    transactions_dataset = fetch_data.create_dataset_from_df('Database/transactions.db',feature_columns,target_column)
 
     #print(transactions_dataset.DESCR)
 
