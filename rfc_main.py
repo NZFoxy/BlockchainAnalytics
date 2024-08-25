@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 #%pip install seaborn ///// run this if you dont have seaborn yet
@@ -13,7 +14,12 @@ from sklearn.ensemble import RandomForestClassifier
 
 
 
-def main():
+def rfc_main():
+    
+     # Fetch API key from environment variable
+    api_key = os.getenv('POLYGONSCAN_API_KEY')
+    if not api_key:
+        raise ValueError("API Key is not set in environment variables")
     print("Classifier script is running")
 
     iris = datasets.load_iris()
@@ -95,5 +101,5 @@ def main():
     #print(iris) shows iris dataset
     '''
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__rfc_main__":
+    rfc_main()
