@@ -2,7 +2,6 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import fetch_data
 import ml_model
-import classify
 
 def main():
     # Fetch all transactions from the database
@@ -28,14 +27,16 @@ def main():
     orange_count = 0
     red_count = 0
 
-    # Classify predictions based on the fraud score thresholds
-    for pred in predictions:
+    # Iterate through predictions and corresponding transactions
+    for idx, pred in enumerate(predictions):
         if pred <= 0.5:
             green_count += 1
-        elif 0.5 <= pred <= 0.7:
+        elif 0.5 < pred <= 0.7:
             orange_count += 1
-        elif 0.7 <= pred <= 1.0:
+        elif 0.7 < pred <= 1.0:
             red_count += 1
+            # Print the transaction hash for 'red' transactions
+            print(f"Red Transaction - Hash: {data.iloc[idx]['hash']}")
 
     print(f"Number of 'green' transactions: {green_count}")
     print(f"Number of 'orange' transactions: {orange_count}")
