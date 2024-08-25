@@ -2,6 +2,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import fetch_data
 import ml_model
+import classify
 
 def main():
     # Fetch all transactions from the database

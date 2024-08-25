@@ -50,7 +50,7 @@ def main():
     cursor_tx = conn_tx.cursor()
     
     # Example query to get a row from the transactions database
-    cursor_tx.execute('SELECT * FROM transactions LIMIT 1')
+    cursor_tx.execute('SELECT * FROM Transactions LIMIT 1')
     example_row = cursor_tx.fetchone()
     
     # Map the row to a dictionary with correct field names
