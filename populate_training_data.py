@@ -13,7 +13,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Ensure API key is set
-api_key = os.getenv('POLYGONSCAN_API_KEY')
+api_key = os.getenv('POLYSCAN_API_KEY')
 if not api_key:
     raise ValueError("API Key is not set in environment variables")
 

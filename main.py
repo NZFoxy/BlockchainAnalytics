@@ -7,11 +7,11 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 #%matplotlib inline
 import transaction_data_pipeline
-import import_wallet
+import populate_single_wallet
 import sqlite3
 import os
 
-from import_wallet import fetch_transactions
+from populate_single_wallet import fetch_transactions
 
 from sklearn import datasets, metrics
 from sklearn.model_selection import train_test_split
@@ -58,7 +58,7 @@ def main():
     transaction_data_pipeline.empty_and_recreate_transactions_db()
     
     #ask for wallet and populate transactions2 database
-    wallet_address = import_wallet.main()
+    wallet_address = populate_single_wallet.main()
     
     # Connect to SQLite database
     conn = sqlite3.connect('Database/transactions2.db')
