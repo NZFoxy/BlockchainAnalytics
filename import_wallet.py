@@ -268,6 +268,8 @@ def main():
 
     # Fetch transactions for the wallet address
     fetch_transactions(wallet_address, start_block, end_block, chunk_size)
+    
+    return wallet_address
 
 if __name__ == "__main__":
     main()

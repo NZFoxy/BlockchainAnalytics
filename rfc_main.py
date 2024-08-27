@@ -7,10 +7,9 @@ import matplotlib.pyplot as plt
 import fetch_data
 import import_wallet
 import sqlite3
+import os
 
-import daniel
 from import_wallet import fetch_transactions
-from import_requests import fetch_tx_by_address
 
 from sklearn import datasets, metrics
 from sklearn.model_selection import train_test_split
@@ -71,11 +70,11 @@ def main():
     #wallet_address = input("Enter the Polygon wallet address: ")
 
     # Empty and recreate the transactions2.db
-    daniel.empty_and_recreate_transactions_db()
+    fetch_data.empty_and_recreate_transactions_db()
     
     #ask for wallet and populate transactions2 database
-    import_wallet.main()
-
+    wallet_address = import_wallet.main()
+    
     # Connect to SQLite database
     conn = sqlite3.connect('Database/transactions2.db')
 
@@ -112,12 +111,17 @@ def main():
 
     
     # Select only the columns you want to save
-    result_df = wallet_transactions_df[['hash', 'predicted_label']]
+    result_df = wallet_transactions_df[['hash','fromAddress','predicted_label']]
 
-    # Save the result to a CSV file
-    result_df.to_csv('wallet_transactions_with_labels.csv', index=False)
+    # Ensure the Database directory exists
+    results_dir = 'Results'
+    if not os.path.exists(results_dir):
+     os.makedirs(results_dir)
+    
+     # Save the result to a CSV file in the Results folder
+    result_df.to_csv('./Results/' + wallet_address + '.csv', index=False)
 
-    print("Results saved to wallet_transactions_with_labels.csv")
+    print("Results saved to "+wallet_address+".csv")
     
 
     '''
