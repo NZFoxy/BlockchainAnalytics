@@ -1,5 +1,7 @@
 #main.py //Please run populate_trainig_data.py first before running this script//
 
+#main.py //Please run populate_trainig_data.py first before running this script//
+
 import pandas as pd
 import numpy as np
 #%pip install seaborn ///// run this if you dont have seaborn yet
@@ -15,6 +17,7 @@ from populate_single_wallet import fetch_transactions
 
 from sklearn import datasets, metrics
 from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import RandomForestClassifier
 
 def main():
