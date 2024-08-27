@@ -272,7 +272,8 @@ if __name__ == "__main__":
     if end_block is None:
         logging.error("Could not determine the current block number. Exiting.")
         exit()
-
+        
+        
     # Set a default chunk size or prompt for it
     chunk_size = 1000  # 1000 transactions per request, adjust as needed
 
