@@ -1,15 +1,5 @@
-'''
-import sqlite3
-import pandas as pd
-
-def fetch_data_from_sql(database_path):
-    conn = sqlite3.connect(database_path)
-    query = "SELECT * FROM Transactions"
-    df = pd.read_sql_query(query, conn)
-    conn.close()
-    return df
-'''
-
+#Transaction_data_pipeline.py //This script is used to create a dataset from the transactions.db database 
+#labels the transactions based on a rule based system//
 
 import sqlite3
 import pandas as pd
@@ -114,3 +104,46 @@ def create_dataset_from_df(database_path, feature_columns,target_column):
     dataset = Bunch(data=data, feature_names=feature_names, target=target, target_names=target_names, DESCR="Transactions Dataset")
 
     return dataset
+
+#Empty and recreate the transactions2 database: This is a helper functiondef empty_and_recreate_transactions_db(db_name='Database/transactions2.db'):
+
+def empty_and_recreate_transactions_db(db_name='Database/transactions2.db'):
+    """
+    Empties the transactions.db by dropping the transactions table and recreating it.
+    """
+    conn = sqlite3.connect(db_name)
+    cursor = conn.cursor()
+    
+    # Drop the table if it exists
+    cursor.execute("DROP TABLE IF EXISTS transactions")
+    print("Transactions table dropped successfully.")
+    
+    # Recreate the table with the appropriate structure
+    cursor.execute("""
+        CREATE TABLE transactions (
+            hash TEXT PRIMARY KEY,
+            nonce INTEGER,
+            blockHash TEXT,
+            blockNumber INTEGER,
+            transactionIndex INTEGER,
+            fromAddress TEXT,
+            toAddress TEXT,
+            value REAL,
+            gas INTEGER,
+            gasPrice INTEGER,
+            isError INTEGER,
+            txreceipt_status INTEGER,
+            input TEXT,
+            contractAddress TEXT,
+            cumulativeGasUsed INTEGER,
+            gasUsed INTEGER,
+            confirmations INTEGER,
+            timestamp TEXT
+        )
+    """)
+    print("Transactions table recreated successfully.")
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+  

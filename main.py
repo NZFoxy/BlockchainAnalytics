@@ -1,61 +1,105 @@
+#main.py //Please run populate_trainig_data.py first before running this script//
+
 import pandas as pd
+import numpy as np
+#%pip install seaborn ///// run this if you dont have seaborn yet
+import seaborn as sns
+import matplotlib.pyplot as plt
+#%matplotlib inline
+import transaction_data_pipeline
+import populate_single_wallet
+import sqlite3
+import os
+
+from populate_single_wallet import fetch_transactions
+
+from sklearn import datasets, metrics
 from sklearn.model_selection import train_test_split
-import fetch_data
-import ml_model
+from sklearn.ensemble import RandomForestClassifier
 
 def main():
-    # Fetch all transactions from the database
-    data = fetch_data.fetch_data_from_sql('Database/transactions.db')
-
-    # Preprocess the data
-    X, y, scaler = ml_model.preprocess_data(data)
-
-    # Split the data into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-
-    # Train the machine learning model
-    regressor = ml_model.train_model(X_train, y_train)
-
-    # Evaluate the model's performance
-    ml_model.evaluate_model(regressor, X_test, y_test)
-
-    # Predict fraud scores for all transactions
-    predictions = ml_model.predict_all_transactions(data, scaler, regressor)
+    print("Classifier script is running")
     
-    # Initialize counters for each severity level
-    green_count = 0
-    orange_count = 0
-    red_count = 0
+    #criterias for which the transaction is classified on
+    feature_columns = ['gasUsed', 'isError', 'value', 'confirmations', 'nonce', 'txreceipt_status']
 
-    # Classify predictions based on the fraud score thresholds
-    for pred in predictions:
-        if pred <= 0.5:
-            green_count += 1
-        elif 0.5 <= pred <= 0.7:
-            orange_count += 1
-        elif 0.7 <= pred <= 1.0:
-            red_count += 1
+    #the "label"
+    target_column = 'flag'
 
-    print(f"Number of 'green' transactions: {green_count}")
-    print(f"Number of 'orange' transactions: {orange_count}")
-    print(f"Number of 'red' transactions: {red_count}")
+    transactions_dataset = transaction_data_pipeline.create_dataset_from_df('Database/transactions.db',feature_columns,target_column)
 
-    # Predict the fraud score for a new transaction
-    new_transaction = pd.DataFrame([[15000, 0.0001, 21000, 1692799200]], 
-                                    columns=['value', 'gasPrice', 'gas', 'timestamp'])  # Example: [value, gasPrice, gas, timestamp]
-    fraud_score = ml_model.predict_transaction(new_transaction, scaler, regressor)
+    X = transactions_dataset.data
+    y = transactions_dataset.target
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, random_state = 1, test_size = 0.3, stratify = y)
+
+    clf = RandomForestClassifier(n_estimators = 100, random_state = 42)
+
+    clf.fit(X_train, y_train)
+
+    print("RandomForestClassifier Training completed")
+
+    # Evaluate model performance
+    y_pred = clf.predict(X_test)
+    print(metrics.accuracy_score(y_test, y_pred))
+
+    mat = metrics.confusion_matrix(y_test, y_pred)
+
+    print(mat)
+
+    sns.heatmap(mat, annot = True, fmt = 'd', cbar = False, xticklabels = transactions_dataset.target_names, yticklabels = transactions_dataset.target_names)
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+
+    print("Feature importance %")
+    print(clf.feature_importances_)
+
+    # Empty and recreate the transactions2.db
+    transaction_data_pipeline.empty_and_recreate_transactions_db()
     
-    # Determine severity level based on fraud score
-    if fraud_score <= 0.5:
-        severity = "green"
-    elif 0.6 <= fraud_score <= 0.7:
-        severity = "orange"
-    elif 0.8 <= fraud_score <= 1.0:
-        severity = "red"
-    else:
-        severity = "unclassified"  # In case the fraud score doesn't fit in any category
+    #ask for wallet and populate transactions2 database
+    wallet_address = populate_single_wallet.main()
+    
+    # Connect to SQLite database
+    conn = sqlite3.connect('Database/transactions2.db')
 
-    print("Transaction severity:", severity)
+    # Build the query string
+    if feature_columns:
+        columns = ', '.join(feature_columns)
+    
+    #query = f"SELECT {columns} FROM Transactions"
+    query = f"SELECT * FROM Transactions"
 
+    # Execute query to fetch all data from the 'Transactions' table
+    wallet_transactions_df = pd.read_sql_query(query, conn) #this is the dataframe
+    # Close the connection
+    conn.close()
+    # Debugging: Check the type of wallet_transactions_df
+    print(f"Type of wallet_transactions_df: {type(wallet_transactions_df)}")
+
+    wallet_transactions_data = wallet_transactions_df[feature_columns].values
+
+    # Predict the labels for these transactions
+    predicted_labels = clf.predict(wallet_transactions_data)
+    #print(f"Predicted Labels: {predicted_labels}")
+
+    predicted_labels_named = predicted_labels
+
+    # Add the predicted labels to the DataFrame
+    wallet_transactions_df['predicted_label'] = predicted_labels_named
+
+    # Select only the columns you want to save
+    result_df = wallet_transactions_df[['hash','fromAddress','predicted_label']]
+
+    # Ensure the Database directory exists
+    results_dir = 'Results'
+    if not os.path.exists(results_dir):
+     os.makedirs(results_dir)
+    
+     # Save the result to a CSV file in the Results folder
+    result_df.to_csv('./Results/' + wallet_address + '.csv', index=False)
+
+    print("Results saved to "+wallet_address+".csv")
+    
 if __name__ == "__main__":
     main()
