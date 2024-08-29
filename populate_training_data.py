@@ -1,3 +1,5 @@
+#Populates the database with transactions from a wallet address, this is used to train the model.
+
 import os
 import requests
 import json
@@ -11,7 +13,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Ensure API key is set
-api_key = os.getenv('POLYGONSCAN_API_KEY')
+api_key = os.getenv('POLYSCAN_API_KEY')
 if not api_key:
     raise ValueError("API Key is not set in environment variables")
 
@@ -272,7 +274,8 @@ if __name__ == "__main__":
     if end_block is None:
         logging.error("Could not determine the current block number. Exiting.")
         exit()
-
+        
+        
     # Set a default chunk size or prompt for it
     chunk_size = 1000  # 1000 transactions per request, adjust as needed
 
