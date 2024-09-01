@@ -31,27 +31,38 @@ def fetch_data_from_sql(database_path, query):
     return transactions_df
 
 #4
+import sqlite3
+
+# Assuming calculate_fraud_score is inside transaction_data_pipeline.py
+
 def calculate_fraud_score(row):
     score = 0
+
+    avg_gas = 362103.233422042
+    avg_value = 1.88398547269491e+19
+    avg_gas_price = 83268624715
+    avg_cumulative_gas = 9187077.1295445
     
-    avg_gas = 21000  # Example average gas for a simple transaction
+    
     if int(row['gasUsed']) > avg_gas * 5:
-        score += 0.3
-    
-    if int(row['isError']) == 1 or int(row['txreceipt_status']) == 0:
-        score += 0.1
-    
-    avg_value = 10 * (10**18)  # Example average value in Wei
+        score += 0.4
+
     if int(row['value']) > avg_value * 100:
         score += 0.4
-    
-    if int(row['confirmations']) < 20000:
-        score += 0.1
-    
-    if int(row['nonce']) > 100:  # Example threshold
+
+    if int(row['confirmations']) < 10000:
+        score += 0.2
+
+    if int(row['nonce']) > 100:
         score += 0.1
 
-    return min(score, 1)  # Cap the score at 1
+    if int(row['gasPrice']) > avg_gas_price * 10:
+        score += 0.3
+
+    if int(row['cumulativeGasUsed']) > avg_cumulative_gas * 10:
+        score += 0.2
+
+    return min(score, 1)
 
 #3
 def label_transaction(row):

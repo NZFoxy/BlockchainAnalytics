@@ -21,7 +21,7 @@ def main():
     print("Classifier script is running")
     
     #criterias for which the transaction is classified on
-    feature_columns = ['gasUsed', 'isError', 'value', 'confirmations', 'nonce', 'txreceipt_status']
+    feature_columns = ['gasUsed', 'gasPrice', 'value', 'confirmations', 'nonce', 'txreceipt_status','cumulativeGasUsed']
 
     #the "label"
     target_column = 'flag'
