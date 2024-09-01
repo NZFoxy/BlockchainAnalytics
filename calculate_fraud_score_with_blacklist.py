@@ -10,9 +10,6 @@ def is_address_blacklisted(cursor_fraud, address):
     return result is not None
 
 # Function to calculate the fraud score
-def is_address_contract(address):
-    # Example check for contract addresses, replace with actual logic if different
-    return address.startswith('0x') and len(address) == 42 and address.islower()  # Assuming lowercase addresses are contracts
 
 def calculate_fraud_score(cursor_fraud, row):
     score = 0
