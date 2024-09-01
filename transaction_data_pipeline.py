@@ -60,11 +60,11 @@ def label_transaction(row):
     fraud_score = calculate_fraud_score(row)
            
     # Rule based labelling, this is to save time because manually labelling 136k transactions is pretty difficult
-    if fraud_score <= 0.5:
+    if fraud_score < 0.5:
         return 'green' 
     elif 0.5 <= fraud_score <= 0.7:
         return 'orange'
-    elif 0.7 <= fraud_score <= 1.0:
+    elif 0.7 < fraud_score <= 1.0:
         return 'red'
 
 
