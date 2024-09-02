@@ -19,7 +19,7 @@ def calculate_fraud_score(cursor_fraud, row):
 
     # Check if the fromAddress or toAddress is blacklisted
     if is_address_blacklisted(cursor_fraud, from_address) or is_address_blacklisted(cursor_fraud, to_address):
-        score += 0.8
+        score += 0.5
 
     avg_gas = 21000  # Example average gas for a simple transaction
 

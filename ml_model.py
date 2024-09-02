@@ -4,7 +4,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
-from classify import calculate_fraud_score
+from calculate_fraud_score_with_blacklist import main
 
 def preprocess_data(df):
     # Convert data types
@@ -14,7 +14,7 @@ def preprocess_data(df):
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s').astype(int)
     
     # Calculate fraud score for each row and create a new column 'fraudulent_score'
-    df['fraudulent_score'] = df.apply(calculate_fraud_score, axis=1)
+    df['fraudulent_score'] = df.apply(main, axis=1)
 
     # Select features and label for model
     X = df[['value', 'gasPrice', 'gas', 'timestamp']]
