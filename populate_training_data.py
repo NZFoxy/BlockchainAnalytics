@@ -1,3 +1,4 @@
+#populate_training_data.py
 #Populates the database with transactions from a wallet address, this is used to train the model.
 
 import os
