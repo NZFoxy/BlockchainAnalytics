@@ -142,10 +142,16 @@ def calculate_fraud_score(row, method):
 
     return min(score, 1)  # Cap the score at 1
 
+# Connect to SQLite database and retrieve fraudulent wallets
+def get_fraud_wallets(database_path):
+    conn = sqlite3.connect(database_path)
+    query = "SELECT address FROM fraud_wallets"  # Assuming the fraud wallets are stored in a column named 'wallet_address'
+    fraud_wallets_df = pd.read_sql_query(query, conn)
+    conn.close()
 
-
-
-
+    # Convert the fraud_wallets_df to a set for faster lookup
+    fraud_wallets = set(fraud_wallets_df['address'])
+    return fraud_wallets
 
 #Empty and recreate the transactions2 database: This is a helper functiondef empty_and_recreate_transactions_db(db_name='Database/transactions2.db'):
 
