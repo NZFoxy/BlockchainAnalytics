@@ -22,24 +22,27 @@ from sklearn.utils import Bunch
 def main():
     print("Classifier script is running")
     
-    #criterias for which the transaction is classified on
-    feature_columns = ['gasUsed', 'value', 'confirmations', 'nonce', 'txreceipt_status', 'gasPrice', 'cumulativeGasUsed', 'fromAddress', 'toAddress']
+    #criterias for which the transaction is classified on  ########## use this for a)
+    feature_columns = ['gasUsed', 'value', 'confirmations', 'nonce', 'txreceipt_status', 'gasPrice', 'cumulativeGasUsed', 'fromAddress', 'todAddress']
+
+    ##### use this for b) and c)
+    #feature_columns = ['gasUsed', 'value', 'confirmations', 'nonce', 'txreceipt_status', 'gasPrice', 'cumulativeGasUsed']
 
     #the "label"
     target_column = 'flag'
 
 
     ############################### a) Orignal (Using 136k transactions + rule based labelling)
-    
+    '''
     transactions_dataset = transaction_data_pipeline.create_dataset_from_df('Database/transactions.db',feature_columns,target_column)
     X = transactions_dataset.data
     y = transactions_dataset.target
     X_train, X_test, y_train, y_test = train_test_split(X, y, random_state = 1, test_size = 0.3, stratify = y)
-    
+    '''
     ###############################
 
     ############################## b) using Jacobs dataset
-    ''''
+    '''
     transactions_dataframe = pd.read_csv('training.csv')
 
     X = transactions_dataframe[feature_columns]
@@ -54,7 +57,7 @@ def main():
     ########################################
 
     ############################# c) labelling Jacob's dataset and training on it
-    '''
+    
     transactions_dataframe = pd.read_csv('training1.csv')
 
     transactions_dataframe = transaction_data_pipeline.flag_transactions_csv(transactions_dataframe) #flag the "csv"
@@ -67,7 +70,7 @@ def main():
     transactions_dataset = Bunch(data=X.values, target=y.values, feature_names=feature_columns, target_names=target_names)
 
     X_train, X_test, y_train, y_test = train_test_split(transactions_dataset.data, transactions_dataset.target, test_size=0.3, random_state=42)
-    '''
+    
     #############################
 
 

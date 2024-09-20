@@ -101,9 +101,9 @@ def label_transaction(row):
     fraud_score = calculate_fraud_score(row)
            
     # Rule based labelling, this is to save time because manually labelling 136k transactions is pretty difficult
-    if fraud_score <= 0.5:
+    if fraud_score < 0.5:
         return 'green' 
-    elif 0.5 <= fraud_score <= 0.7:
+    elif 0.5 <= fraud_score < 0.7:
         return 'orange'
     elif 0.7 <= fraud_score <= 1.0:
         return 'red'
@@ -159,7 +159,8 @@ def calculate_fraud_score(row):
     if int(row['cumulativeGasUsed']) > avg_cumulative_gas * 10:
         score += 0.2
 
-
+    #### frau_wallet checking only works for a) option at the moment
+    '''
     # Check if from_address or to_address is in fraud wallets
     fraud_wallets = get_fraud_wallets('Database/fraud_wallets.db')
 
@@ -169,7 +170,7 @@ def calculate_fraud_score(row):
     # If either address is in the fraud wallets list, increase the score by 1
     if is_from_fraud_wallet == 1 or is_to_fraud_wallet == 1:
         score += 1
-
+    '''
 
     return min(score, 1)  # Cap the score at 1
 
