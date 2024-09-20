@@ -5,17 +5,67 @@ import sqlite3
 import pandas as pd
 from sklearn.utils import Bunch
 
+#1
+def create_dataset_from_df(database_path, feature_columns,target_column, method):
+
+    # Build the query string
+    if feature_columns:
+        columns = ', '.join(feature_columns)
+        #if target_column:
+        #   columns += f", {target_column}"
+    else:
+        columns = '*'
+    
+    query = f"SELECT {columns} FROM Transactions"   
+    
+    method = method.lower()
+    
+    #getting the dataframe that contains only the feature and target columns
+    transactions_df = fetch_data_from_sql(database_path, query, method)
+
+    # Convert the DataFrame to a dataset
+    
+    # If there's a target column, separate it from the features
+    if target_column and target_column in transactions_df.columns:
+        target = transactions_df[target_column].values
+
+        #dropping the column to separate it because we have separated is as the 'target' attribute
+        transactions_df = transactions_df.drop(columns=[target_column])
+    else:
+        target = None
+
+    #drop the fromAddress and toAddress columns as they are strings, use is_from_fraud_wallet and is_to_fraud_wallet instead
+    transactions_df = transactions_df.drop(columns=['fromAddress'])
+    transactions_df = transactions_df.drop(columns=['toAddress'])
+
+    data = transactions_df.values  # Convert DataFrame to NumPy array
+    feature_names = transactions_df.columns.tolist()  # Extract column names as feature names
+
+    target_names = ['green', 'orange', 'red']
+    
+    # Create a Bunch object to store the dataset
+    dataset = Bunch(data=data, feature_names=feature_names, target=target, target_names=target_names, DESCR="Transactions Dataset")
+
+    return dataset
+
 #2
-def fetch_data_from_sql(database_path, query):
+def fetch_data_from_sql(database_path, query, method):
     # Connect to SQLite database
     conn = sqlite3.connect(database_path)
     
     # Execute query to fetch all data from the 'Transactions' table
+    transactions_df = pd.read_sql_query(query, conn)
 
-    transactions_df = pd.read_sql_query(query, conn) #this is the dataframe
+    if method == 'a':
+        # Load fraud wallets from the database only for method 'a'
+        fraud_wallets = get_fraud_wallets('Database/fraud_wallets.db')
 
-    #flagging the transactions with rule based labelling, then adding it as a new column
-    transactions_df['flag'] = transactions_df.apply(label_transaction, axis=1)
+        # Create binary features for whether from_address or to_address are in the fraud_wallets set
+        transactions_df['is_from_fraud_wallet'] = transactions_df['fromAddress'].apply(lambda x: 1 if x in fraud_wallets else 0)
+        transactions_df['is_to_fraud_wallet'] = transactions_df['toAddress'].apply(lambda x: 1 if x in fraud_wallets else 0)
+
+    # Flag the transactions with rule-based labelling
+    transactions_df['flag'] = transactions_df.apply(lambda row: label_transaction(row, method), axis=1)
 
     # Count the number of each flag
     flag_counts = transactions_df['flag'].value_counts()
@@ -30,91 +80,72 @@ def fetch_data_from_sql(database_path, query):
 
     return transactions_df
 
-#4
-import sqlite3
+def flag_transactions_csv(transactions_df, method):
+    # Flagging the transactions with rule-based labelling
+    method = method.lower()
+    transactions_df['flag'] = transactions_df.apply(lambda row: label_transaction(row, method), axis=1)
 
-# Assuming calculate_fraud_score is inside transaction_data_pipeline.py
+    # Count the number of each flag
+    flag_counts = transactions_df['flag'].value_counts()
 
-def calculate_fraud_score(row):
+    # Print out the number of red, green, and orange labels
+    print(f"Number of 'red' flags: {flag_counts.get('red', 0)}")
+    print(f"Number of 'green' flags: {flag_counts.get('green', 0)}")
+    print(f"Number of 'orange' flags: {flag_counts.get('orange', 0)}")
+
+    return transactions_df
+
+#3
+def label_transaction(row, method):
+    # Calculate fraud score here based on the method
+    fraud_score = calculate_fraud_score(row, method)
+           
+    # Rule-based labelling
+    if fraud_score < 0.5:
+        return 'green' 
+    elif 0.5 <= fraud_score < 0.7:
+        return 'orange'
+    elif 0.7 <= fraud_score <= 1.0:
+        return 'red'
+
+def calculate_fraud_score(row, method):
     score = 0
 
+    # Average values from the database
     avg_gas = 362103.233422042
     avg_value = 1.88398547269491e+19
     avg_gas_price = 83268624715
     avg_cumulative_gas = 9187077.1295445
-    
-    
+
+    # Score calculation based on certain thresholds
     if int(row['gasUsed']) > avg_gas * 5:
         score += 0.4
-
     if int(row['value']) > avg_value * 100:
         score += 0.4
-
     if int(row['confirmations']) < 10000:
         score += 0.2
-
     if int(row['nonce']) > 100:
         score += 0.1
-
     if int(row['gasPrice']) > avg_gas_price * 10:
         score += 0.3
-
     if int(row['cumulativeGasUsed']) > avg_cumulative_gas * 10:
         score += 0.2
 
-    return min(score, 1)
+    # Check fraud wallets only for method 'a'
+    if method == 'a':
+        is_from_fraud_wallet = row['is_from_fraud_wallet']
+        is_to_fraud_wallet = row['is_to_fraud_wallet']
+        
+        # If either address is in the fraud wallets list, increase the score by 1
+        if is_from_fraud_wallet == 1 or is_to_fraud_wallet == 1:
+            score += 1
 
-#3
-def label_transaction(row):
-
-    #calculate fraud score here
-    fraud_score = calculate_fraud_score(row)
-           
-    # Rule based labelling, this is to save time because manually labelling 136k transactions is pretty difficult
-    if fraud_score < 0.5:
-        return 'green' 
-    elif 0.5 <= fraud_score <= 0.7:
-        return 'orange'
-    elif 0.7 < fraud_score <= 1.0:
-        return 'red'
+    return min(score, 1)  # Cap the score at 1
 
 
-#1
-def create_dataset_from_df(database_path, feature_columns,target_column):
 
-    # Build the query string
-    if feature_columns:
-        columns = ', '.join(feature_columns)
-        #if target_column:
-        #   columns += f", {target_column}"
-    else:
-        columns = '*'
-    
-    query = f"SELECT {columns} FROM Transactions"   
-    
-    #getting the dataframe that contains only the feature and target columns
-    transactions_df = fetch_data_from_sql(database_path, query)
 
-    # Convert the DataFrame to a dataset
-    
-    # If there's a target column, separate it from the features
-    if target_column and target_column in transactions_df.columns:
-        target = transactions_df[target_column].values
 
-        #dropping the column to separate it because we have separated is as the 'target' attribute
-        transactions_df = transactions_df.drop(columns=[target_column])
-    else:
-        target = None
-
-    data = transactions_df.values  # Convert DataFrame to NumPy array
-    feature_names = transactions_df.columns.tolist()  # Extract column names as feature names
-
-    target_names = ['green', 'orange', 'red']
-    
-    # Create a Bunch object to store the dataset
-    dataset = Bunch(data=data, feature_names=feature_names, target=target, target_names=target_names, DESCR="Transactions Dataset")
-
-    return dataset
 
 #Empty and recreate the transactions2 database: This is a helper functiondef empty_and_recreate_transactions_db(db_name='Database/transactions2.db'):
 
