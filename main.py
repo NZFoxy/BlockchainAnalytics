@@ -20,7 +20,7 @@ def main():
     print("Select the method you want to use:")
     print("a) Original dataset (Using 136k transactions + rule-based labeling)")
     print("b) Jacob's dataset")
-    print("c) Labeling Jacob's dataset and training on it")
+    print("c) Rule Labeling Jacob's dataset and training on it")
     
     method = input("Please enter 'a', 'b', or 'c': ").lower()
 
@@ -82,6 +82,7 @@ def main():
     # Feature importance
     print("Feature importance %")
     print(clf.feature_importances_)
+    print(feature_columns)
 
     # Empty and recreate the transactions2.db
     transaction_data_pipeline.empty_and_recreate_transactions_db()
@@ -119,6 +120,12 @@ def main():
     # Predict the labels for these transactions
     predicted_labels = clf.predict(wallet_transactions_data)
     wallet_transactions_df['predicted_label'] = predicted_labels
+
+    # Count and print the number of green, orange, and red labels
+    flag_counts = wallet_transactions_df['predicted_label'].value_counts()
+    print(f"Number of 'green' flags: {flag_counts.get('green', 0)}")
+    print(f"Number of 'orange' flags: {flag_counts.get('orange', 0)}")
+    print(f"Number of 'red' flags: {flag_counts.get('red', 0)}")
 
     # Save the results to a CSV
     result_df = wallet_transactions_df[['hash', 'fromAddress', 'predicted_label']]
