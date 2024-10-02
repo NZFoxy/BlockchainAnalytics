@@ -90,6 +90,7 @@ def main():
     wallet_address = populate_single_wallet.main()
 
     # Connect to SQLite database
+    #conn = sqlite3.connect('Database/orange_wallet_db.db')
     conn = sqlite3.connect('Database/transactions2.db')
 
     # Build the query string
@@ -99,12 +100,16 @@ def main():
     query = f"SELECT * FROM Transactions"
     wallet_transactions_df = pd.read_sql_query(query, conn)
 
-    # Load fraud wallets from the database
-    fraud_wallets = transaction_data_pipeline.get_fraud_wallets('Database/fraud_wallets.db')
+    # Load fraud wallets from the database and normalize them
+    fraud_wallets = set(transaction_data_pipeline.normalize_address(addr) for addr in transaction_data_pipeline.get_fraud_wallets('Database/fraud_wallets.db'))
 
-    # Create binary features for whether from_address or to_address are in the fraud_wallets set
-    wallet_transactions_df['is_from_fraud_wallet'] = wallet_transactions_df['fromAddress'].apply(lambda x: 1 if x in fraud_wallets else 0)
-    wallet_transactions_df['is_to_fraud_wallet'] = wallet_transactions_df['toAddress'].apply(lambda x: 1 if x in fraud_wallets else 0)
+    # Normalize the addresses in the DataFrame and apply the cross-check
+    wallet_transactions_df['is_from_fraud_wallet'] = wallet_transactions_df['fromAddress'].apply(
+        lambda x: 1 if transaction_data_pipeline.normalize_address(x) in fraud_wallets else 0)
+    wallet_transactions_df['is_to_fraud_wallet'] = wallet_transactions_df['toAddress'].apply(
+        lambda x: 1 if transaction_data_pipeline.normalize_address(x) in fraud_wallets else 0)
+
+
 
     # Close the connection
     conn.close()

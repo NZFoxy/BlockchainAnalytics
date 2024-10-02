@@ -57,13 +57,18 @@ def fetch_data_from_sql(database_path, query, method):
     # Execute query to fetch all data from the 'Transactions' table
     transactions_df = pd.read_sql_query(query, conn)
 
+    
     if method == 'a':
-        # Load fraud wallets from the database only for method 'a'
-        fraud_wallets = get_fraud_wallets('Database/fraud_wallets.db')
+        # Load fraud wallets from the database and normalize them
+        fraud_wallets = set(normalize_address(addr) for addr in get_fraud_wallets('Database/fraud_wallets.db'))
+        #print(f"Fraud wallets (normalized): {fraud_wallets}")
 
-        # Create binary features for whether from_address or to_address are in the fraud_wallets set
-        transactions_df['is_from_fraud_wallet'] = transactions_df['fromAddress'].apply(lambda x: 1 if x in fraud_wallets else 0)
-        transactions_df['is_to_fraud_wallet'] = transactions_df['toAddress'].apply(lambda x: 1 if x in fraud_wallets else 0)
+        # Normalize the addresses in the DataFrame and apply the cross-check
+        transactions_df['is_from_fraud_wallet'] = transactions_df['fromAddress'].apply(
+            lambda x: 1 if normalize_address(x) in fraud_wallets else 0)
+        transactions_df['is_to_fraud_wallet'] = transactions_df['toAddress'].apply(
+            lambda x: 1 if normalize_address(x) in fraud_wallets else 0)
+    
 
     # Flag the transactions with rule-based labelling
     transactions_df['flag'] = transactions_df.apply(lambda row: label_transaction(row, method), axis=1)
@@ -109,6 +114,7 @@ def label_transaction(row, method):
     elif 0.7 <= fraud_score <= 1.0:
         return 'red'
 
+#4
 def calculate_fraud_score(row, method):
     score = 0
 
@@ -148,19 +154,20 @@ def calculate_fraud_score(row, method):
     stdev_gasPrice = 338528269404.209 
     stdev_cumulativeGasUsed = 6944482.88998016
 
-    if mean_gasUsed + stdev_gasUsed <= int(row['gasUsed']):
+    if mean_gasUsed + (stdev_gasUsed) <= int(row['gasUsed']):
         score += 0.4
-    if mean_value + stdev_value<= int(row['value']):
+    if mean_value + (stdev_value )  <= int(row['value']):
         score += 0.4
-    if mean_confirmations + stdev_confirmations <= int(row['confirmations']):
+    if mean_confirmations + (stdev_confirmations)  <= int(row['confirmations']):
         score += 0.2
-    if mean_nonce + stdev_nonce<= int(row['nonce']):
+    if mean_nonce + (stdev_nonce ) <= int(row['nonce']):
         score += 0.1
-    if mean_gasPrice + stdev_gasPrice <= int(row['gasPrice']):
+    if mean_gasPrice + (stdev_gasPrice ) <= int(row['gasPrice']):
         score += 0.3
-    if mean_cumulativeGasUsed + stdev_cumulativeGasUsed <= int(row['cumulativeGasUsed']):
+    if mean_cumulativeGasUsed + (stdev_cumulativeGasUsed ) <= int(row['cumulativeGasUsed']):
         score += 0.2
 
+    
     # Check fraud wallets only for method 'a'
     if method == 'a':
         is_from_fraud_wallet = row['is_from_fraud_wallet']
@@ -169,6 +176,7 @@ def calculate_fraud_score(row, method):
         # If either address is in the fraud wallets list, increase the score by 1
         if is_from_fraud_wallet == 1 or is_to_fraud_wallet == 1:
             score += 1
+    
 
     return min(score, 1)  # Cap the score at 1
 
@@ -183,6 +191,11 @@ def get_fraud_wallets(database_path):
     fraud_wallets = set(fraud_wallets_df['address'])
     return fraud_wallets
 
+    # Normalize function to ensure consistent address formatting
+def normalize_address(address):
+    if isinstance(address, str):
+        return address.lower().strip()  # Convert to lowercase and strip whitespace
+    return address
 
 #Empty and recreate the transactions2 database: This is a helper functiondef empty_and_recreate_transactions_db(db_name='Database/transactions2.db'):
 
