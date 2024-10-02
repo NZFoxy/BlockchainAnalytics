@@ -1,4 +1,3 @@
-
 import os
 import requests
 import json
@@ -59,6 +58,36 @@ def get_starting_block(wallet_address):
         'startblock': 0,
         'endblock': 99999999,
         'sort': 'asc',
+        'apikey': api_key,
+        'page': 1,
+        'offset': 1  # Limit to first transaction to get starting block
+    }
+    url_parts = ('https', 'api.polygonscan.com', '/api', '', urlencode(query_params), '')
+    url = urlunparse(url_parts)
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        tx_data = response.json()
+        if 'result' in tx_data and isinstance(tx_data['result'], list) and len(tx_data['result']) > 0:
+            return int(tx_data['result'][0]['blockNumber'])  # Return block number of first transaction
+        else:
+            logging.warning("No transactions found for this address.")
+            return None
+    except requests.RequestException as e:
+        log_error(wallet_address, f"Request error: {e}")
+    except json.JSONDecodeError:
+        log_error(wallet_address, "Failed to decode JSON from response.")
+    return None
+
+def get_end_block(wallet_address):
+    """Fetch the starting block number for a specific address from Polygonscan."""
+    query_params = {
+        'module': 'account',
+        'action': 'txlist',
+        'address': wallet_address,
+        'startblock': 0,
+        'endblock': 99999999,
+        'sort': 'desc',
         'apikey': api_key,
         'page': 1,
         'offset': 1  # Limit to first transaction to get starting block
@@ -183,7 +212,6 @@ def save_to_sql(transactions):
     conn.close()
 
 
-    #no spiderwebbing
 def fetch_transactions(wallet_address, start_block, end_block, chunk_size):
     """Fetch transactions for a specific address from Polygonscan and save them in an SQL table."""
     
@@ -193,59 +221,86 @@ def fetch_transactions(wallet_address, start_block, end_block, chunk_size):
     
     processed_wallets.add(wallet_address)
     start_time = time.time()
-    page = 1
     total_transactions = 0
-    
-    while True:
-        query_params = {
-            'module': 'account',
-            'action': 'txlist',
-            'address': wallet_address,
-            'startblock': start_block,
-            'endblock': end_block,
-            'sort': 'asc',
-            'apikey': api_key,
-            'page': page,
-            'offset': chunk_size,
-        }
-        url_parts = ('https', 'api.polygonscan.com', '/api', '', urlencode(query_params), '')
-        url = urlunparse(url_parts)
-        
-        try:
-            response = requests.get(url)
-            response.raise_for_status()
-            tx_data = response.json()
-            if 'result' in tx_data and isinstance(tx_data['result'], list):
-                transactions = tx_data['result']
+    max_transactions_per_query = 10000  # Polygonscan limit
 
-                if not transactions:
-                    logging.info("No more transactions found. Exiting pagination loop.")
-                    break
-                
-                # Filter out transactions that already exist in the database
-                unique_transactions = filter_unique_transactions(transactions)
-                total_transactions += len(unique_transactions)
-                save_to_sql(unique_transactions)
-                logging.info(f"Data has been written to the SQL database. Total transactions pulled so far: {total_transactions}")
-                
-                page += 1
-                # Update start_block to prevent fetching duplicate transactions
-                start_block = int(transactions[-1]['blockNumber']) + 1
-            else:
-                logging.warning("Failed to fetch transactions. Exiting.")
-                break
-        except requests.RequestException as e:
-            log_error(wallet_address, f"Request error: {e}")
-            break
-        except json.JSONDecodeError:
-            log_error(wallet_address, "Failed to decode JSON from response.")
-            break
+    last_block_number = start_block  # Initialize the last block number
+
+    while start_block < end_block:
+        page = 1  # Reset pagination for each block range
+
+        transactions_fetched = 0
         
-        time.sleep(0.2)
+        while True:
+            query_params = {
+                'module': 'account',
+                'action': 'txlist',
+                'address': wallet_address,
+                'startblock': start_block,  # Keep start_block fixed during pagination
+                'endblock': end_block,
+                'sort': 'asc',
+                'apikey': api_key,
+                'page': page,
+                'offset': chunk_size,  # Fetch `chunk_size` transactions per page
+            }
+            url_parts = ('https', 'api.polygonscan.com', '/api', '', urlencode(query_params), '')
+            url = urlunparse(url_parts)
+        
+            try:
+                response = requests.get(url)
+                response.raise_for_status()
+                tx_data = response.json()
+
+                if 'result' in tx_data and isinstance(tx_data['result'], list):
+                    transactions = tx_data['result']
+
+                    if not transactions:
+                        logging.info("No more transactions found. Exiting pagination loop.")
+                        break
+                
+                    # Filter out transactions that already exist in the database
+                    unique_transactions = filter_unique_transactions(transactions)
+                    total_transactions += len(unique_transactions)
+                    save_to_sql(unique_transactions)
+                    logging.info(f"Data has been written to the SQL database. Total transactions pulled so far: {total_transactions}")
+
+                    # Track the highest block number in this batch
+                    transactions_fetched += len(transactions)
+                    highest_block = max([int(tx['blockNumber']) for tx in transactions])
+                    logging.info(f"Highest block fetched in this batch: {highest_block}")
+
+                    # Update pagination
+                    page += 1  # Keep paginating until no more transactions
+
+                    # Break if we hit the 10,000 transaction limit
+                    if transactions_fetched >= max_transactions_per_query:
+                        logging.info(f"Hit the 10,000 transaction limit in this range. Moving to the next range.")
+                        break
+
+                else:
+                    #logging.warning("Failed to fetch transactions. Exiting.")
+                    logging.warning(f"Invalid or empty response: {tx_data}")
+                    break
+
+            except requests.RequestException as e:
+                log_error(wallet_address, f"Request error: {e}")
+                break
+            except json.JSONDecodeError:
+                log_error(wallet_address, "Failed to decode JSON from response.")
+                break
+        
+            time.sleep(0.2)  # Consider adding exponential backoff for rate limits
+
+        # After all pages are fetched, update start_block for the next fetch
+        if highest_block > start_block:
+            start_block = highest_block + 1
+            logging.info(f"Updated start_block for the next fetch: {start_block}")
     
     end_time = time.time()
     total_time = end_time - start_time
     logging.info(f"Total time taken: {total_time:.2f} seconds")
+    logging.info(f"Total transactions processed: {total_transactions}")
+
 
 
 def main():
@@ -254,12 +309,15 @@ def main():
 
     # Automatically determine the starting block number
     start_block = get_starting_block(wallet_address)
+    logging.info(f"Starting block is {start_block}")
+
     if start_block is None:
         logging.error("Could not determine the starting block number. Exiting.")
         exit()
 
     # Automatically determine the current block number
-    end_block = get_current_block()
+    end_block = get_end_block(wallet_address)
+    logging.info(f"Ending block is {end_block}")
     if end_block is None:
         logging.error("Could not determine the current block number. Exiting.")
         exit()

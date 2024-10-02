@@ -6,9 +6,7 @@ import pandas as pd
 from sklearn.utils import Bunch
 
 #1
-
 def create_dataset_from_df(database_path, feature_columns,target_column, method):
-
 
     # Build the query string
     if feature_columns:
@@ -20,12 +18,11 @@ def create_dataset_from_df(database_path, feature_columns,target_column, method)
     
     query = f"SELECT {columns} FROM Transactions"   
     
-
     method = method.lower()
     
-    #getting the dataframe that contains only the feature and target columns
+    #getting the dataframe that contains only the feature and target columns 
+    #calls #2
     transactions_df = fetch_data_from_sql(database_path, query, method)
-
 
     # Convert the DataFrame to a dataset
     
@@ -53,14 +50,11 @@ def create_dataset_from_df(database_path, feature_columns,target_column, method)
     return dataset
 
 #2
-
 def fetch_data_from_sql(database_path, query, method):
-
     # Connect to SQLite database
     conn = sqlite3.connect(database_path)
     
     # Execute query to fetch all data from the 'Transactions' table
-
     transactions_df = pd.read_sql_query(query, conn)
 
     if method == 'a':
@@ -73,7 +67,6 @@ def fetch_data_from_sql(database_path, query, method):
 
     # Flag the transactions with rule-based labelling
     transactions_df['flag'] = transactions_df.apply(lambda row: label_transaction(row, method), axis=1)
-
 
     # Count the number of each flag
     flag_counts = transactions_df['flag'].value_counts()
@@ -93,7 +86,6 @@ def flag_transactions_csv(transactions_df, method):
     method = method.lower()
     transactions_df['flag'] = transactions_df.apply(lambda row: label_transaction(row, method), axis=1)
 
-
     # Count the number of each flag
     flag_counts = transactions_df['flag'].value_counts()
 
@@ -101,7 +93,7 @@ def flag_transactions_csv(transactions_df, method):
     print(f"Number of 'red' flags: {flag_counts.get('red', 0)}")
     print(f"Number of 'green' flags: {flag_counts.get('green', 0)}")
     print(f"Number of 'orange' flags: {flag_counts.get('orange', 0)}")
-    
+
     return transactions_df
 
 #3
@@ -110,7 +102,6 @@ def label_transaction(row, method):
     fraud_score = calculate_fraud_score(row, method)
            
     # Rule-based labelling
-
     if fraud_score < 0.5:
         return 'green' 
     elif 0.5 <= fraud_score < 0.7:
@@ -118,12 +109,11 @@ def label_transaction(row, method):
     elif 0.7 <= fraud_score <= 1.0:
         return 'red'
 
-
 def calculate_fraud_score(row, method):
     score = 0
 
+    '''
     # Average values from the database
-
     avg_gas = 362103.233422042
     avg_value = 1.88398547269491e+19
     avg_gas_price = 83268624715
@@ -142,6 +132,34 @@ def calculate_fraud_score(row, method):
         score += 0.3
     if int(row['cumulativeGasUsed']) > avg_cumulative_gas * 10:
         score += 0.2
+    '''
+
+    mean_gasUsed = 487483.700398221
+    mean_value = 1.25353784685658e+21
+    mean_confirmations = 40566927.1218456
+    mean_nonce = 5386.11399239341
+    mean_gasPrice = 45862339962.2391
+    mean_cumulativeGasUsed = 8703764.19729006
+    
+    stdev_gasUsed = 1229467.56529239
+    stdev_value = 6.61993367968414e+22
+    stdev_confirmations = 8770610.74755724
+    stdev_nonce = 62980.3777420489
+    stdev_gasPrice = 338528269404.209 
+    stdev_cumulativeGasUsed = 6944482.88998016
+
+    if mean_gasUsed + stdev_gasUsed <= int(row['gasUsed']):
+        score += 0.4
+    if mean_value + stdev_value<= int(row['value']):
+        score += 0.4
+    if mean_confirmations + stdev_confirmations <= int(row['confirmations']):
+        score += 0.2
+    if mean_nonce + stdev_nonce<= int(row['nonce']):
+        score += 0.1
+    if mean_gasPrice + stdev_gasPrice <= int(row['gasPrice']):
+        score += 0.3
+    if mean_cumulativeGasUsed + stdev_cumulativeGasUsed <= int(row['cumulativeGasUsed']):
+        score += 0.2
 
     # Check fraud wallets only for method 'a'
     if method == 'a':
@@ -154,7 +172,7 @@ def calculate_fraud_score(row, method):
 
     return min(score, 1)  # Cap the score at 1
 
-# Connect to SQLite database and retrieve fraudulent wallets
+    # Connect to SQLite database and retrieve fraudulent wallets
 def get_fraud_wallets(database_path):
     conn = sqlite3.connect(database_path)
     query = "SELECT address FROM fraud_wallets"  # Assuming the fraud wallets are stored in a column named 'wallet_address'
@@ -207,3 +225,4 @@ def empty_and_recreate_transactions_db(db_name='Database/transactions2.db'):
 
     cursor.close()
     conn.close()
+  
